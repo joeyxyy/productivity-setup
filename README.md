@@ -97,12 +97,28 @@ Preview the production build:
 npm run preview
 ```
 
+Create a downloadable production package:
+
+```bash
+npm run package
+```
+
+That creates `release/productivity-setup-web.zip`. The zip contains the built `dist` folder plus a short run note. To use it, unzip it and serve `dist` with any static web server, for example:
+
+```bash
+npx serve dist
+```
+
+GitHub also provides a source download from **Code -> Download ZIP**, but that source zip still needs `npm install` and `npm run build`.
+
 ## Project Structure
 
 ```txt
 src/
   main.tsx      App, timer engine, controls, reminders, settings, stats
   styles.css    Responsive interface styles
+scripts/
+  package-web.mjs  Creates the downloadable production zip
 ```
 
 ## Current Status
