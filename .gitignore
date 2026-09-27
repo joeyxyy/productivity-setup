@@ -1,6 +1,13 @@
 node_modules
 dist
 release
+desktop-release
+desktop-build
+desktop-app-build
+android
+android/.gradle
+android/app/build
+android/build
 .env
 .env.*
 .DS_Store

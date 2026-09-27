@@ -70,6 +70,7 @@ Shortcuts are ignored while typing in inputs.
 - Browser local storage
 - Web Notifications API
 - Web App Manifest
+- Electron for desktop packaging
 
 ## Getting Started
 
@@ -111,6 +112,28 @@ npx serve dist
 
 GitHub also provides a source download from **Code -> Download ZIP**, but that source zip still needs `npm install` and `npm run build`.
 
+## Desktop App
+
+Run the desktop app locally:
+
+```bash
+npm run desktop
+```
+
+Create a Windows desktop app folder:
+
+```bash
+npm run desktop:pack
+```
+
+Build outputs go to `desktop-app-build`. Open the generated folder and double-click `Productivity Setup.exe`.
+
+Create a full Windows installer:
+
+```bash
+npm run desktop:dist
+```
+
 ## Project Structure
 
 ```txt
@@ -119,6 +142,11 @@ src/
   styles.css    Responsive interface styles
 scripts/
   package-web.mjs  Creates the downloadable production zip
+electron/
+  main.cjs     Desktop app entrypoint
+public/
+  sw.js        PWA offline cache
+  manifest.webmanifest
 ```
 
 ## Current Status
