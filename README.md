@@ -127,7 +127,7 @@ Create a Windows desktop app folder:
 npm run desktop:pack
 ```
 
-Build outputs go to `desktop-app-build-v3`. Open the generated folder and double-click `Productivity Setup.exe`.
+Build outputs go to `desktop-app-build-v4`. Open the generated folder and double-click `Productivity Setup.exe`.
 
 Create a full Windows installer:
 

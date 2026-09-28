@@ -98,6 +98,31 @@ h1 {
   width: 48px;
 }
 
+.window-tools {
+  align-items: center;
+  display: flex;
+  gap: 0.6rem;
+}
+
+.drag-handle {
+  -webkit-app-region: drag;
+  align-items: center;
+  aspect-ratio: 1;
+  background: #0f172a;
+  border: 1px solid #0f172a;
+  border-radius: 999px;
+  color: #ffffff;
+  cursor: grab;
+  display: flex;
+  justify-content: center;
+  user-select: none;
+  width: 48px;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
 .hero {
   align-items: center;
   display: flex;

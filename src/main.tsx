@@ -9,6 +9,7 @@ import {
   Eye,
   FastForward,
   Footprints,
+  GripHorizontal,
   Pause,
   Play,
   RefreshCcw,
@@ -500,9 +501,14 @@ function App() {
             <p className="eyebrow">Productivity Setup</p>
             <h1>{state.status === "idle" ? "Ready to start?" : current.label}</h1>
           </div>
-          <button className="icon-button" onClick={() => setShowSettings((value) => !value)} aria-label="Settings">
-            <Settings size={21} />
-          </button>
+          <div className="window-tools">
+            <div className="drag-handle" title="Drag to move window" aria-label="Drag to move window">
+              <GripHorizontal size={21} />
+            </div>
+            <button className="icon-button" onClick={() => setShowSettings((value) => !value)} aria-label="Settings">
+              <Settings size={21} />
+            </button>
+          </div>
         </header>
 
         <section className="hero">
