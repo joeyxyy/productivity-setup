@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Bell,
+  BellOff,
   Check,
   Coffee,
   Droplets,
@@ -27,6 +28,8 @@ declare global {
 type ActivityType = "sit" | "stand" | "walk";
 type SessionStatus = "idle" | "running" | "paused";
 type OverlayType = "eye" | "stretch" | null;
+type AlarmTone = "classic" | "digital" | "bell" | "gentle";
+type AlarmHandle = { stop: () => void };
 
 type Step = {
   type: ActivityType;
@@ -57,6 +60,7 @@ type SettingsState = {
   hourlyBreakEnabled: boolean;
   notificationsEnabled: boolean;
   soundEnabled: boolean;
+  alarmTone: AlarmTone;
   autoStart: boolean;
 };
 
@@ -86,6 +90,7 @@ const defaultSettings: SettingsState = {
   hourlyBreakEnabled: true,
   notificationsEnabled: true,
   soundEnabled: true,
+  alarmTone: "classic",
   autoStart: true,
 };
 
@@ -154,45 +159,52 @@ const notificationCopy = (step: Step) => {
   return ["Back to work", "Sit down and begin your next focus block."];
 };
 
-const soundNotes: Record<ActivityType | "eye" | "stretch", number[]> = {
-  sit: [523, 659],
-  stand: [440, 587, 740],
-  walk: [330, 440, 554],
-  eye: [784, 659],
-  stretch: [392, 494, 587],
+const alarmTones: Record<AlarmTone, { notes: number[]; wave: OscillatorType; interval: number }> = {
+  classic: { notes: [880, 660, 880, 660], wave: "square", interval: 1800 },
+  digital: { notes: [1047, 1319, 1047], wave: "sawtooth", interval: 1400 },
+  bell: { notes: [659, 988, 1319], wave: "sine", interval: 2200 },
+  gentle: { notes: [523, 659, 784], wave: "triangle", interval: 2600 },
 };
 
-const playCue = (type: ActivityType | "eye" | "stretch", enabled: boolean) => {
-  if (!enabled) return;
+const createAlarm = (tone: AlarmTone, enabled: boolean): AlarmHandle | null => {
+  if (!enabled) return null;
 
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) return;
+  if (!AudioContextClass) return null;
 
   const context = new AudioContextClass();
   const master = context.createGain();
-  master.gain.setValueAtTime(0.0001, context.currentTime);
-  master.gain.exponentialRampToValueAtTime(0.18, context.currentTime + 0.02);
-  master.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.95);
+  master.gain.setValueAtTime(0.22, context.currentTime);
   master.connect(context.destination);
+  const selected = alarmTones[tone];
 
-  soundNotes[type].forEach((frequency, index) => {
-    const start = context.currentTime + index * 0.16;
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
+  const ring = () => {
+    selected.notes.forEach((frequency, index) => {
+      const start = context.currentTime + index * 0.2;
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
 
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(frequency, start);
-    gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(0.9, start + 0.03);
-    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.28);
+      oscillator.type = selected.wave;
+      oscillator.frequency.setValueAtTime(frequency, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.85, start + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.3);
 
-    oscillator.connect(gain);
-    gain.connect(master);
-    oscillator.start(start);
-    oscillator.stop(start + 0.32);
-  });
+      oscillator.connect(gain);
+      gain.connect(master);
+      oscillator.start(start);
+      oscillator.stop(start + 0.34);
+    });
+  };
 
-  window.setTimeout(() => void context.close(), 1200);
+  ring();
+  const interval = window.setInterval(ring, selected.interval);
+  return {
+    stop: () => {
+      window.clearInterval(interval);
+      void context.close();
+    },
+  };
 };
 
 const initialState = (): SavedState => {
@@ -258,6 +270,8 @@ function App() {
   const [overlayRemaining, setOverlayRemaining] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [lastNotifiedPhase, setLastNotifiedPhase] = useState(-1);
+  const [alarmActive, setAlarmActive] = useState(false);
+  const alarmRef = useRef<AlarmHandle | null>(null);
 
   const routine = useMemo(() => buildRoutine(state.settings), [state.settings]);
   const current = routine[state.phaseIndex] ?? routine[0];
@@ -272,9 +286,27 @@ function App() {
     routine.slice(0, state.phaseIndex).reduce((sum, step) => sum + step.duration, 0) +
     Math.max(0, current.duration - Math.max(0, remaining));
 
+  const stopAlarm = () => {
+    alarmRef.current?.stop();
+    alarmRef.current = null;
+    setAlarmActive(false);
+  };
+
+  const startAlarm = () => {
+    stopAlarm();
+    const alarm = createAlarm(state.settings.alarmTone, state.settings.soundEnabled);
+    if (alarm) {
+      alarmRef.current = alarm;
+      setAlarmActive(true);
+    }
+  };
+
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 250);
-    return () => window.clearInterval(id);
+    return () => {
+      window.clearInterval(id);
+      alarmRef.current?.stop();
+    };
   }, []);
 
   useEffect(() => {
@@ -290,12 +322,12 @@ function App() {
     if (state.settings.eyeEnabled && now >= state.nextEyeAt && overlay === null) {
       setOverlay("eye");
       setOverlayRemaining(20000);
-      playCue("eye", state.settings.soundEnabled);
+      startAlarm();
     }
     if (state.settings.stretchEnabled && now >= state.nextStretchAt && overlay === null) {
       setOverlay("stretch");
       setOverlayRemaining(120000);
-      playCue("stretch", state.settings.soundEnabled);
+      startAlarm();
     }
   }, [now, overlay, state]);
 
@@ -329,7 +361,10 @@ function App() {
       }
       if (event.key.toLowerCase() === "s") skipPhase();
       if (event.key === "+" || event.key === "=") extendPhase(5);
-      if (event.key === "Escape") setOverlay(null);
+      if (event.key === "Escape") {
+        stopAlarm();
+        setOverlay(null);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -342,7 +377,7 @@ function App() {
   };
 
   const notifyTransition = (step: Step) => {
-    playCue(step.type, state.settings.soundEnabled);
+    startAlarm();
     if (!state.settings.notificationsEnabled || !("Notification" in window) || Notification.permission !== "granted") return;
     const [title, body] = notificationCopy(step);
     new Notification(title, { body, icon: "/icon.svg" });
@@ -362,10 +397,11 @@ function App() {
       nextEyeAt: start + 20 * 60000,
       nextStretchAt: start + 2 * 60 * 60000,
     }));
-    setLastNotifiedPhase(-1);
+    setLastNotifiedPhase(0);
   };
 
   const togglePause = () => {
+    stopAlarm();
     setState((value) => {
       if (value.status === "idle") return value;
       if (value.status === "paused") {
@@ -387,6 +423,7 @@ function App() {
   };
 
   const skipPhase = () => {
+    stopAlarm();
     const time = Date.now();
     setState((value) => ({
       ...advanceToNow(value, routine, time),
@@ -415,6 +452,7 @@ function App() {
   };
 
   const resetSession = () => {
+    stopAlarm();
     const time = Date.now();
     setState((value) => ({
       ...value,
@@ -432,6 +470,7 @@ function App() {
   const finishSession = () => resetSession();
 
   const finishOverlay = (done: boolean) => {
+    stopAlarm();
     const time = Date.now();
     setState((value) => ({
       ...value,
@@ -447,6 +486,7 @@ function App() {
   };
 
   const updateSetting = <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => {
+    if (key === "soundEnabled" && value === false) stopAlarm();
     setState((currentState) => ({ ...currentState, settings: { ...currentState.settings, [key]: value } }));
   };
 
@@ -511,6 +551,16 @@ function App() {
             <span style={{ width: `${Math.min(100, Math.max(0, phaseProgress * 100))}%` }} />
           </div>
 
+          {alarmActive && (
+            <div className="alarm-banner" role="alert">
+              <Bell size={19} />
+              <strong>Alarm ringing</strong>
+              <button onClick={stopAlarm}>
+                <BellOff size={18} /> Stop alarm
+              </button>
+            </div>
+          )}
+
           <div className="controls">
             {state.status === "idle" ? (
               <button className="primary" onClick={startSession}>
@@ -540,7 +590,14 @@ function App() {
 
         <aside className="side">
           {showSettings ? (
-            <SettingsPanel settings={state.settings} updateSetting={updateSetting} requestNotifications={requestNotifications} />
+            <SettingsPanel
+              settings={state.settings}
+              updateSetting={updateSetting}
+              requestNotifications={requestNotifications}
+              testAlarm={startAlarm}
+              stopAlarm={stopAlarm}
+              alarmActive={alarmActive}
+            />
           ) : (
             <Dashboard stats={state.stats} />
           )}
@@ -571,6 +628,7 @@ function App() {
           onSnooze={() => {
             const time = Date.now();
             setState((value) => ({ ...value, nextEyeAt: time + 2 * 60000 }));
+            stopAlarm();
             setOverlay(null);
           }}
         />
@@ -630,10 +688,16 @@ function SettingsPanel({
   settings,
   updateSetting,
   requestNotifications,
+  testAlarm,
+  stopAlarm,
+  alarmActive,
 }: {
   settings: SettingsState;
   updateSetting: <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => void;
   requestNotifications: () => Promise<void>;
+  testAlarm: () => void;
+  stopAlarm: () => void;
+  alarmActive: boolean;
 }) {
   return (
     <section className="panel settings-panel">
@@ -656,7 +720,20 @@ function SettingsPanel({
       <Toggle label="Hourly recovery" checked={settings.hourlyBreakEnabled} onChange={(value) => updateSetting("hourlyBreakEnabled", value)} />
       <Toggle label="Notifications" checked={settings.notificationsEnabled} onChange={(value) => updateSetting("notificationsEnabled", value)} />
       <Toggle label="Sound" checked={settings.soundEnabled} onChange={(value) => updateSetting("soundEnabled", value)} />
+      <label>
+        Alarm tone
+        <select value={settings.alarmTone} onChange={(event) => updateSetting("alarmTone", event.target.value as AlarmTone)}>
+          <option value="classic">Classic</option>
+          <option value="digital">Digital</option>
+          <option value="bell">Bell</option>
+          <option value="gentle">Gentle</option>
+        </select>
+      </label>
       <Toggle label="Auto-start next" checked={settings.autoStart} onChange={(value) => updateSetting("autoStart", value)} />
+      <button className="wide" onClick={alarmActive ? stopAlarm : testAlarm} disabled={!settings.soundEnabled}>
+        {alarmActive ? <BellOff size={18} /> : <Bell size={18} />}
+        {alarmActive ? "Stop alarm" : "Test selected tone"}
+      </button>
       <button className="wide" onClick={requestNotifications}>
         <Bell size={18} /> Enable Notifications
       </button>

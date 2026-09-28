@@ -5,6 +5,7 @@ desktop-release
 desktop-build
 desktop-app-build
 desktop-app-build-v2
+desktop-app-build-v3
 android
 android/.gradle
 android/app/build

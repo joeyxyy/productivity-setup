@@ -18,7 +18,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -218,6 +219,23 @@ h1 {
   justify-content: center;
 }
 
+.alarm-banner {
+  align-items: center;
+  background: #fff7ed;
+  border: 1px solid #fb923c;
+  border-radius: 8px;
+  color: #9a3412;
+  display: flex;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+  padding: 0.65rem;
+  width: min(100%, 28rem);
+}
+
+.alarm-banner strong {
+  flex: 1;
+}
+
 .primary {
   background: #0f172a;
   border-color: #0f172a;
@@ -295,6 +313,14 @@ h1 {
   border: 1px solid #d7dde8;
   border-radius: 8px;
   max-width: 5.5rem;
+  padding: 0.55rem;
+}
+
+.settings-panel select {
+  background: #ffffff;
+  border: 1px solid #d7dde8;
+  border-radius: 8px;
+  color: #172033;
   padding: 0.55rem;
 }
 
