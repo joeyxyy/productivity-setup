@@ -18,6 +18,7 @@ It is designed for people who want the benefits of frequent movement without hav
 - Tracks simple daily stats locally: productive time, sitting, standing, moving, eye breaks, and position changes.
 - Saves settings and session state in local storage.
 - Includes notification permission flow for browser notifications.
+- Plays calm sound cues on activity changes and reminders when Sound is enabled.
 - Ships as an installable web app via a web app manifest.
 
 ## How It Works
@@ -126,7 +127,7 @@ Create a Windows desktop app folder:
 npm run desktop:pack
 ```
 
-Build outputs go to `desktop-app-build`. Open the generated folder and double-click `Productivity Setup.exe`.
+Build outputs go to `desktop-app-build-v2`. Open the generated folder and double-click `Productivity Setup.exe`.
 
 Create a full Windows installer:
 

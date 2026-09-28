@@ -10,7 +10,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc && vite build",
     "desktop": "npm run build && electron .",
-    "desktop:pack": "npm run build && electron-packager . \"Productivity Setup\" --platform=win32 --arch=x64 --out=desktop-app-build --overwrite --ignore=\"^/(?!dist|electron|package\\.json)\"",
+    "desktop:pack": "npm run build && electron-packager . \"Productivity Setup\" --platform=win32 --arch=x64 --out=desktop-app-build-v2 --overwrite --ignore=\"^/(?!dist|electron|package\\.json)\"",
     "desktop:dist": "npm run build && electron-builder",
     "package": "npm run build && node scripts/package-web.mjs",
     "preview": "vite preview --host 127.0.0.1"
@@ -19,7 +19,7 @@
     "appId": "com.joeyxyy.productivitysetup",
     "productName": "Productivity Setup",
     "directories": {
-      "output": "desktop-app-build"
+      "output": "desktop-app-build-v2"
     },
     "files": [
       "dist/**/*",

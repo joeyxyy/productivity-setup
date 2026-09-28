@@ -18,6 +18,12 @@ import {
 } from "lucide-react";
 import "./styles.css";
 
+declare global {
+  interface Window {
+    webkitAudioContext?: typeof AudioContext;
+  }
+}
+
 type ActivityType = "sit" | "stand" | "walk";
 type SessionStatus = "idle" | "running" | "paused";
 type OverlayType = "eye" | "stretch" | null;
@@ -148,6 +154,47 @@ const notificationCopy = (step: Step) => {
   return ["Back to work", "Sit down and begin your next focus block."];
 };
 
+const soundNotes: Record<ActivityType | "eye" | "stretch", number[]> = {
+  sit: [523, 659],
+  stand: [440, 587, 740],
+  walk: [330, 440, 554],
+  eye: [784, 659],
+  stretch: [392, 494, 587],
+};
+
+const playCue = (type: ActivityType | "eye" | "stretch", enabled: boolean) => {
+  if (!enabled) return;
+
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return;
+
+  const context = new AudioContextClass();
+  const master = context.createGain();
+  master.gain.setValueAtTime(0.0001, context.currentTime);
+  master.gain.exponentialRampToValueAtTime(0.18, context.currentTime + 0.02);
+  master.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.95);
+  master.connect(context.destination);
+
+  soundNotes[type].forEach((frequency, index) => {
+    const start = context.currentTime + index * 0.16;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(frequency, start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.9, start + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.28);
+
+    oscillator.connect(gain);
+    gain.connect(master);
+    oscillator.start(start);
+    oscillator.stop(start + 0.32);
+  });
+
+  window.setTimeout(() => void context.close(), 1200);
+};
+
 const initialState = (): SavedState => {
   const saved = localStorage.getItem(storageKey);
   if (saved) {
@@ -243,10 +290,12 @@ function App() {
     if (state.settings.eyeEnabled && now >= state.nextEyeAt && overlay === null) {
       setOverlay("eye");
       setOverlayRemaining(20000);
+      playCue("eye", state.settings.soundEnabled);
     }
     if (state.settings.stretchEnabled && now >= state.nextStretchAt && overlay === null) {
       setOverlay("stretch");
       setOverlayRemaining(120000);
+      playCue("stretch", state.settings.soundEnabled);
     }
   }, [now, overlay, state]);
 
@@ -293,6 +342,7 @@ function App() {
   };
 
   const notifyTransition = (step: Step) => {
+    playCue(step.type, state.settings.soundEnabled);
     if (!state.settings.notificationsEnabled || !("Notification" in window) || Notification.permission !== "granted") return;
     const [title, body] = notificationCopy(step);
     new Notification(title, { body, icon: "/icon.svg" });
