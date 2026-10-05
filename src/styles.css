@@ -279,6 +279,16 @@ h1 {
   flex: 1;
 }
 
+.app-error {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  color: #991b1b;
+  margin: 0 0 1rem;
+  padding: 0.7rem;
+  width: min(100%, 28rem);
+}
+
 .primary {
   background: #0f172a;
   border-color: #0f172a;
@@ -501,6 +511,13 @@ h1 {
 
 .dashboard-alarm {
   margin-top: 0.8rem;
+}
+
+.setting-status {
+  color: #64748b;
+  font-size: 0.78rem;
+  margin: -0.25rem 0 0;
+  text-align: center;
 }
 
 .quick-adjust {

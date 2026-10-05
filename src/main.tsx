@@ -23,12 +23,6 @@ import {
 } from "lucide-react";
 import "./styles.css";
 
-declare global {
-  interface Window {
-    webkitAudioContext?: typeof AudioContext;
-  }
-}
-
 type ActivityType = "sit" | "stand" | "walk";
 type SessionStatus = "idle" | "running" | "paused";
 type OverlayType = "eye" | "stretch" | null;
@@ -95,7 +89,7 @@ type SavedState = {
 };
 
 const storageKey = "productivity-setup-v2";
-const appVersion = "0.4.1";
+const appVersion = "0.4.2";
 const dateKey = (timestamp = Date.now()) => {
   const date = new Date(timestamp);
   const year = date.getFullYear();
@@ -185,51 +179,19 @@ const notificationCopy = (step: Step) => {
   return ["Back to work", "Sit down and begin your next focus block."];
 };
 
-const alarmTones: Record<AlarmTone, { notes: number[]; wave: OscillatorType; interval: number }> = {
-  classic: { notes: [880, 660, 880, 660], wave: "square", interval: 1800 },
-  digital: { notes: [1047, 1319, 1047], wave: "sawtooth", interval: 1400 },
-  bell: { notes: [659, 988, 1319], wave: "sine", interval: 2200 },
-  gentle: { notes: [523, 659, 784], wave: "triangle", interval: 2600 },
-};
-
-const createAlarm = (tone: AlarmTone, enabled: boolean): AlarmHandle | null => {
+const createAlarm = (tone: AlarmTone, enabled: boolean, onError: (message: string) => void): AlarmHandle | null => {
   if (!enabled) return null;
-
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) return null;
-
-  const context = new AudioContextClass();
-  const master = context.createGain();
-  void context.resume();
-  master.gain.setValueAtTime(0.42, context.currentTime);
-  master.connect(context.destination);
-  const selected = alarmTones[tone];
-
-  const ring = () => {
-    selected.notes.forEach((frequency, index) => {
-      const start = context.currentTime + index * 0.2;
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-
-      oscillator.type = selected.wave;
-      oscillator.frequency.setValueAtTime(frequency, start);
-      gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(0.85, start + 0.03);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.3);
-
-      oscillator.connect(gain);
-      gain.connect(master);
-      oscillator.start(start);
-      oscillator.stop(start + 0.34);
-    });
-  };
-
-  ring();
-  const interval = window.setInterval(ring, selected.interval);
+  const audio = new Audio(`./audio/${tone}.wav`);
+  audio.loop = true;
+  audio.volume = 1;
+  void audio.play().catch((error: unknown) => {
+    const detail = error instanceof Error ? error.message : "Unknown audio error";
+    onError(`Alarm could not play: ${detail}`);
+  });
   return {
     stop: () => {
-      window.clearInterval(interval);
-      void context.close();
+      audio.pause();
+      audio.currentTime = 0;
     },
   };
 };
@@ -336,6 +298,11 @@ function App() {
   const [selectedDate, setSelectedDate] = useState(todayKey());
   const [lastNotifiedPhase, setLastNotifiedPhase] = useState(-1);
   const [alarmActive, setAlarmActive] = useState(false);
+  const [alarmError, setAlarmError] = useState("");
+  const [notificationStatus, setNotificationStatus] = useState(() => {
+    if (!("Notification" in window)) return "Notifications unavailable";
+    return Notification.permission === "granted" ? "Notifications enabled" : Notification.permission === "denied" ? "Notifications blocked" : "Permission not requested";
+  });
   const alarmRef = useRef<AlarmHandle | null>(null);
 
   const routine = useMemo(() => buildRoutine(state.settings), [state.settings]);
@@ -359,7 +326,8 @@ function App() {
 
   const startAlarm = () => {
     stopAlarm();
-    const alarm = createAlarm(state.settings.alarmTone, state.settings.soundEnabled);
+    setAlarmError("");
+    const alarm = createAlarm(state.settings.alarmTone, state.settings.soundEnabled, setAlarmError);
     if (alarm) {
       alarmRef.current = alarm;
       setAlarmActive(true);
@@ -442,17 +410,25 @@ function App() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  const requestNotifications = async () => {
-    if ("Notification" in window && Notification.permission === "default") {
-      await Notification.requestPermission();
+  const requestNotifications = async (showConfirmation = false) => {
+    if (!("Notification" in window)) {
+      setNotificationStatus("Notifications unavailable");
+      return;
     }
+    const permission = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
+    if (permission === "granted") {
+      setNotificationStatus("Notifications enabled");
+      if (showConfirmation) new Notification("Notifications enabled", { body: "Productivity Setup can alert you in the background." });
+      return;
+    }
+    setNotificationStatus("Notifications blocked in Windows or app settings");
   };
 
   const notifyTransition = (step: Step) => {
     startAlarm();
     if (!state.settings.notificationsEnabled || !("Notification" in window) || Notification.permission !== "granted") return;
     const [title, body] = notificationCopy(step);
-    new Notification(title, { body, icon: "/icon.svg" });
+    new Notification(title, { body, icon: "./icon.svg" });
   };
 
   const startSession = async () => {
@@ -656,6 +632,8 @@ function App() {
             </div>
           )}
 
+          {alarmError && <p className="app-error" role="alert">{alarmError}</p>}
+
           <div className="controls">
             {state.status === "idle" ? (
               <button className="primary" onClick={startSession}>
@@ -689,6 +667,7 @@ function App() {
               settings={state.settings}
               updateSetting={updateSetting}
               requestNotifications={requestNotifications}
+              notificationStatus={notificationStatus}
               testAlarm={startAlarm}
               stopAlarm={stopAlarm}
               alarmActive={alarmActive}
@@ -876,13 +855,15 @@ function SettingsPanel({
   settings,
   updateSetting,
   requestNotifications,
+  notificationStatus,
   testAlarm,
   stopAlarm,
   alarmActive,
 }: {
   settings: SettingsState;
   updateSetting: <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => void;
-  requestNotifications: () => Promise<void>;
+  requestNotifications: (showConfirmation?: boolean) => Promise<void>;
+  notificationStatus: string;
   testAlarm: () => void;
   stopAlarm: () => void;
   alarmActive: boolean;
@@ -922,9 +903,10 @@ function SettingsPanel({
         {alarmActive ? <BellOff size={18} /> : <Bell size={18} />}
         {alarmActive ? "Stop alarm" : "Test selected tone"}
       </button>
-      <button className="wide" onClick={requestNotifications}>
-        <Bell size={18} /> Enable Notifications
+      <button className="wide" onClick={() => void requestNotifications(true)}>
+        <Bell size={18} /> {notificationStatus === "Notifications enabled" ? "Test notification" : "Enable notifications"}
       </button>
+      <p className="setting-status">{notificationStatus}</p>
     </section>
   );
 }

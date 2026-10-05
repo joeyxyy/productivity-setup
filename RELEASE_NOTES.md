@@ -1,4 +1,4 @@
-# Productivity Setup v0.4.1
+# Productivity Setup v0.4.2
 
 Desktop update with reliable alarms and daily productivity history.
 
@@ -15,13 +15,15 @@ Desktop update with reliable alarms and daily productivity history.
 - Kept alarms and timer transitions active while the window is minimized.
 - Added a visible version badge and main-screen Test Alarm button.
 - Reset legacy saved state that could keep sound disabled or show inflated hours.
+- Replaced generated Web Audio tones with bundled looping WAV alarms.
+- Added visible notification permission status and a notification test.
 
 ## Local Download
 
 The packaged desktop app zip is created at:
 
 ```txt
-release/Productivity-Setup-Desktop-v0.4.1.zip
+release/Productivity-Setup-Desktop-v0.4.2.zip
 ```
 
 Unzip it, then run:
