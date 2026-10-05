@@ -98,6 +98,12 @@ h1 {
   width: 48px;
 }
 
+.icon-button.active {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #ffffff;
+}
+
 .window-tools {
   align-items: center;
   display: flex;
@@ -319,6 +325,128 @@ h1 {
 
 .stat strong {
   font-size: 1.35rem;
+}
+
+.history-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.history-heading,
+.date-controls,
+.history-legend {
+  align-items: center;
+  display: flex;
+}
+
+.history-heading {
+  justify-content: space-between;
+}
+
+.history-heading h2 {
+  font-size: 1.8rem;
+  margin: 0;
+}
+
+.history-heading .eyebrow {
+  margin-bottom: 0.25rem;
+}
+
+.date-controls {
+  gap: 0.4rem;
+}
+
+.small-icon {
+  aspect-ratio: 1;
+  min-height: 38px;
+  padding: 0;
+  width: 38px;
+}
+
+.date-picker {
+  align-items: center;
+  display: flex;
+  font-size: 0.86rem;
+  font-weight: 700;
+  justify-content: space-between;
+}
+
+.date-picker input {
+  background: #ffffff;
+  border: 1px solid #d7dde8;
+  border-radius: 8px;
+  color: #172033;
+  padding: 0.55rem;
+}
+
+.hour-grid {
+  display: grid;
+  gap: 0.45rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.hour-cell {
+  background: #eef2f7;
+  border: 1px solid #dce3ec;
+  border-radius: 6px;
+  display: grid;
+  min-height: 3.15rem;
+  padding: 0.45rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.hour-cell::before {
+  background: #bbf7d0;
+  bottom: 0;
+  content: "";
+  height: var(--fill);
+  left: 0;
+  position: absolute;
+  right: 0;
+}
+
+.hour-cell span,
+.hour-cell strong {
+  position: relative;
+}
+
+.hour-cell span {
+  color: #64748b;
+  font-size: 0.72rem;
+}
+
+.hour-cell strong {
+  font-size: 0.88rem;
+}
+
+.hour-cell.productive {
+  border-color: #86efac;
+}
+
+.history-legend {
+  color: #64748b;
+  font-size: 0.76rem;
+  gap: 1rem;
+}
+
+.history-legend span {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.35rem;
+}
+
+.legend-dot {
+  background: #eef2f7;
+  border: 1px solid #dce3ec;
+  border-radius: 2px;
+  height: 0.75rem;
+  width: 0.75rem;
+}
+
+.productive-dot {
+  background: #bbf7d0;
+  border-color: #86efac;
 }
 
 .settings-panel {

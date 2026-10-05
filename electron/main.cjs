@@ -1,5 +1,9 @@
-const { app, BrowserWindow, shell } = require("electron");
+const { app, BrowserWindow, powerSaveBlocker, shell } = require("electron");
 const path = require("node:path");
+
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+
+let powerBlockerId = null;
 
 const createWindow = () => {
   const win = new BrowserWindow({
@@ -11,6 +15,7 @@ const createWindow = () => {
     backgroundColor: "#f8fafc",
     autoHideMenuBar: true,
     webPreferences: {
+      backgroundThrottling: false,
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -25,6 +30,7 @@ const createWindow = () => {
 };
 
 app.whenReady().then(() => {
+  powerBlockerId = powerSaveBlocker.start("prevent-app-suspension");
   createWindow();
 
   app.on("activate", () => {
@@ -35,6 +41,9 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
+  if (powerBlockerId !== null && powerSaveBlocker.isStarted(powerBlockerId)) {
+    powerSaveBlocker.stop(powerBlockerId);
+  }
   if (process.platform !== "darwin") {
     app.quit();
   }

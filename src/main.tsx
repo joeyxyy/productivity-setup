@@ -3,7 +3,10 @@ import { createRoot } from "react-dom/client";
 import {
   Bell,
   BellOff,
+  CalendarDays,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Coffee,
   Droplets,
   Eye,
@@ -31,6 +34,7 @@ type SessionStatus = "idle" | "running" | "paused";
 type OverlayType = "eye" | "stretch" | null;
 type AlarmTone = "classic" | "digital" | "bell" | "gentle";
 type AlarmHandle = { stop: () => void };
+type SideView = "dashboard" | "history" | "settings";
 
 type Step = {
   type: ActivityType;
@@ -50,6 +54,16 @@ type Stats = {
   stretch: number;
   changes: number;
   day: string;
+};
+
+type WorkBlock = {
+  start: number;
+  end: number;
+  type: ActivityType;
+};
+
+type DayRecord = Stats & {
+  blocks: WorkBlock[];
 };
 
 type SettingsState = {
@@ -76,11 +90,19 @@ type SavedState = {
   nextEyeAt: number;
   nextStretchAt: number;
   stats: Stats;
+  history: Record<string, DayRecord>;
   settings: SettingsState;
 };
 
 const storageKey = "productivity-setup-v1";
-const todayKey = () => new Date().toISOString().slice(0, 10);
+const dateKey = (timestamp = Date.now()) => {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+const todayKey = () => dateKey();
 
 const defaultSettings: SettingsState = {
   sitMinutes: 20,
@@ -95,7 +117,7 @@ const defaultSettings: SettingsState = {
   autoStart: true,
 };
 
-const freshStats = (): Stats => ({
+const freshStats = (day = todayKey()): Stats => ({
   productive: 0,
   sit: 0,
   stand: 0,
@@ -103,8 +125,10 @@ const freshStats = (): Stats => ({
   eye: 0,
   stretch: 0,
   changes: 0,
-  day: todayKey(),
+  day,
 });
+
+const freshDay = (day = todayKey()): DayRecord => ({ ...freshStats(day), blocks: [] });
 
 const formatDuration = (ms: number) => {
   const seconds = Math.max(0, Math.ceil(ms / 1000));
@@ -175,7 +199,8 @@ const createAlarm = (tone: AlarmTone, enabled: boolean): AlarmHandle | null => {
 
   const context = new AudioContextClass();
   const master = context.createGain();
-  master.gain.setValueAtTime(0.22, context.currentTime);
+  void context.resume();
+  master.gain.setValueAtTime(0.42, context.currentTime);
   master.connect(context.destination);
   const selected = alarmTones[tone];
 
@@ -213,9 +238,19 @@ const initialState = (): SavedState => {
   if (saved) {
     try {
       const parsed = JSON.parse(saved) as SavedState;
+      const history = parsed.history ?? {};
+      const today = todayKey();
       return {
         ...parsed,
-        stats: parsed.stats.day === todayKey() ? parsed.stats : freshStats(),
+        status: "idle",
+        phaseIndex: 0,
+        cycleCount: 0,
+        phaseStartedAt: 0,
+        phaseEndsAt: 0,
+        pausedRemaining: 0,
+        lastTickAt: Date.now(),
+        stats: history[today] ?? freshStats(today),
+        history,
         settings: { ...defaultSettings, ...parsed.settings },
       };
     } catch {
@@ -234,21 +269,48 @@ const initialState = (): SavedState => {
     nextEyeAt: Date.now() + 20 * 60000,
     nextStretchAt: Date.now() + 2 * 60 * 60000,
     stats: freshStats(),
+    history: {},
     settings: defaultSettings,
   };
+};
+
+const recordElapsed = (state: SavedState, type: ActivityType, start: number, end: number) => {
+  const day = dateKey(end);
+  const elapsed = Math.max(0, end - start);
+  const existing = state.history[day] ?? freshDay(day);
+  const blocks = [...existing.blocks];
+  const last = blocks[blocks.length - 1];
+  if (last && last.type === type && start - last.end < 15000) {
+    blocks[blocks.length - 1] = { ...last, end };
+  } else {
+    blocks.push({ start, end, type });
+  }
+  const record: DayRecord = {
+    ...existing,
+    productive: existing.productive + elapsed,
+    [type]: existing[type] + elapsed,
+    blocks,
+  };
+  return {
+    ...state,
+    stats: day === todayKey() ? record : state.stats,
+    history: { ...state.history, [day]: record },
+  };
+};
+
+const updateTodayRecord = (state: SavedState, update: (record: DayRecord) => DayRecord) => {
+  const day = todayKey();
+  const record = update(state.history[day] ?? freshDay(day));
+  return { ...state, stats: record, history: { ...state.history, [day]: record } };
 };
 
 function advanceToNow(state: SavedState, routine: Step[], now: number): SavedState {
   if (state.status !== "running" || !state.phaseEndsAt) return state;
 
   let next = { ...state };
-  const elapsed = Math.max(0, now - next.lastTickAt);
+  const elapsed = Math.min(10000, Math.max(0, now - next.lastTickAt));
   const currentType = routine[next.phaseIndex]?.type ?? "sit";
-  next.stats = {
-    ...next.stats,
-    productive: next.stats.productive + elapsed,
-    [currentType]: next.stats[currentType] + elapsed,
-  };
+  next = recordElapsed(next, currentType, now - elapsed, now);
   next.lastTickAt = now;
 
   while (now >= next.phaseEndsAt) {
@@ -258,7 +320,7 @@ function advanceToNow(state: SavedState, routine: Step[], now: number): SavedSta
     next.phaseStartedAt = next.phaseEndsAt;
     next.phaseEndsAt =
       next.phaseStartedAt + getStepDuration(routine[next.phaseIndex], next.settings, next.cycleCount);
-    next.stats = { ...next.stats, changes: next.stats.changes + 1 };
+    next = updateTodayRecord(next, (record) => ({ ...record, changes: record.changes + 1 }));
   }
 
   return next;
@@ -269,7 +331,8 @@ function App() {
   const [now, setNow] = useState(Date.now());
   const [overlay, setOverlay] = useState<OverlayType>(null);
   const [overlayRemaining, setOverlayRemaining] = useState(0);
-  const [showSettings, setShowSettings] = useState(false);
+  const [sideView, setSideView] = useState<SideView>("dashboard");
+  const [selectedDate, setSelectedDate] = useState(todayKey());
   const [lastNotifiedPhase, setLastNotifiedPhase] = useState(-1);
   const [alarmActive, setAlarmActive] = useState(false);
   const alarmRef = useRef<AlarmHandle | null>(null);
@@ -313,6 +376,13 @@ function App() {
   useEffect(() => {
     setState((currentState) => advanceToNow(currentState, routine, now));
   }, [now, routine]);
+
+  useEffect(() => {
+    const today = todayKey();
+    if (state.stats.day !== today) {
+      setState((value) => ({ ...value, stats: value.history[today] ?? freshStats(today) }));
+    }
+  }, [now, state.stats.day]);
 
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(state));
@@ -426,22 +496,25 @@ function App() {
   const skipPhase = () => {
     stopAlarm();
     const time = Date.now();
-    setState((value) => ({
-      ...advanceToNow(value, routine, time),
-      status: value.status === "idle" ? "idle" : "running",
-      phaseIndex: (value.phaseIndex + 1) % routine.length,
-      cycleCount: value.phaseIndex === routine.length - 1 ? value.cycleCount + 1 : value.cycleCount,
-      phaseStartedAt: time,
-      phaseEndsAt:
-        time +
-        getStepDuration(
-          routine[(value.phaseIndex + 1) % routine.length],
-          value.settings,
-          value.phaseIndex === routine.length - 1 ? value.cycleCount + 1 : value.cycleCount,
-        ),
-      lastTickAt: time,
-      stats: { ...advanceToNow(value, routine, time).stats, changes: advanceToNow(value, routine, time).stats.changes + 1 },
-    }));
+    setState((value) => {
+      const advanced = advanceToNow(value, routine, time);
+      const changed = updateTodayRecord(advanced, (record) => ({ ...record, changes: record.changes + 1 }));
+      return {
+        ...changed,
+        status: value.status === "idle" ? "idle" : "running",
+        phaseIndex: (value.phaseIndex + 1) % routine.length,
+        cycleCount: value.phaseIndex === routine.length - 1 ? value.cycleCount + 1 : value.cycleCount,
+        phaseStartedAt: time,
+        phaseEndsAt:
+          time +
+          getStepDuration(
+            routine[(value.phaseIndex + 1) % routine.length],
+            value.settings,
+            value.phaseIndex === routine.length - 1 ? value.cycleCount + 1 : value.cycleCount,
+          ),
+        lastTickAt: time,
+      };
+    });
   };
 
   const extendPhase = (minutes: number) => {
@@ -473,16 +546,18 @@ function App() {
   const finishOverlay = (done: boolean) => {
     stopAlarm();
     const time = Date.now();
-    setState((value) => ({
-      ...value,
-      nextEyeAt: overlay === "eye" ? time + 20 * 60000 : value.nextEyeAt,
-      nextStretchAt: overlay === "stretch" ? time + 2 * 60 * 60000 : value.nextStretchAt,
-      stats: {
-        ...value.stats,
-        eye: overlay === "eye" && done ? value.stats.eye + 1 : value.stats.eye,
-        stretch: overlay === "stretch" && done ? value.stats.stretch + 1 : value.stats.stretch,
-      },
-    }));
+    setState((value) => {
+      const tracked = updateTodayRecord(value, (record) => ({
+        ...record,
+        eye: overlay === "eye" && done ? record.eye + 1 : record.eye,
+        stretch: overlay === "stretch" && done ? record.stretch + 1 : record.stretch,
+      }));
+      return {
+        ...tracked,
+        nextEyeAt: overlay === "eye" ? time + 20 * 60000 : value.nextEyeAt,
+        nextStretchAt: overlay === "stretch" ? time + 2 * 60 * 60000 : value.nextStretchAt,
+      };
+    });
     setOverlay(null);
   };
 
@@ -505,7 +580,20 @@ function App() {
             <div className="drag-handle" title="Drag to move window" aria-label="Drag to move window">
               <GripHorizontal size={21} />
             </div>
-            <button className="icon-button" onClick={() => setShowSettings((value) => !value)} aria-label="Settings">
+            <button
+              className={`icon-button ${sideView === "history" ? "active" : ""}`}
+              onClick={() => setSideView((value) => (value === "history" ? "dashboard" : "history"))}
+              aria-label="Productivity history"
+              title="Productivity history"
+            >
+              <CalendarDays size={21} />
+            </button>
+            <button
+              className={`icon-button ${sideView === "settings" ? "active" : ""}`}
+              onClick={() => setSideView((value) => (value === "settings" ? "dashboard" : "settings"))}
+              aria-label="Settings"
+              title="Settings"
+            >
               <Settings size={21} />
             </button>
           </div>
@@ -595,7 +683,7 @@ function App() {
         </section>
 
         <aside className="side">
-          {showSettings ? (
+          {sideView === "settings" ? (
             <SettingsPanel
               settings={state.settings}
               updateSetting={updateSetting}
@@ -603,6 +691,12 @@ function App() {
               testAlarm={startAlarm}
               stopAlarm={stopAlarm}
               alarmActive={alarmActive}
+            />
+          ) : sideView === "history" ? (
+            <HistoryPanel
+              history={state.history}
+              selectedDate={selectedDate}
+              onSelectDate={setSelectedDate}
             />
           ) : (
             <Dashboard stats={state.stats} />
@@ -679,6 +773,79 @@ function Dashboard({ stats }: { stats: Stats }) {
     </section>
   );
 }
+
+function HistoryPanel({
+  history,
+  selectedDate,
+  onSelectDate,
+}: {
+  history: Record<string, DayRecord>;
+  selectedDate: string;
+  onSelectDate: (date: string) => void;
+}) {
+  const record = history[selectedDate] ?? freshDay(selectedDate);
+  const shiftDay = (days: number) => {
+    const date = new Date(`${selectedDate}T12:00:00`);
+    date.setDate(date.getDate() + days);
+    onSelectDate(dateKey(date.getTime()));
+  };
+  const dayStart = new Date(`${selectedDate}T00:00:00`).getTime();
+  const hourMinutes = Array.from({ length: 24 }, (_, hour) => {
+    const start = dayStart + hour * 60 * 60000;
+    const end = start + 60 * 60000;
+    return Math.round(
+      record.blocks.reduce((total, block) => total + Math.max(0, Math.min(block.end, end) - Math.max(block.start, start)), 0) /
+        60000,
+    );
+  });
+
+  return (
+    <section className="panel history-panel">
+      <div className="history-heading">
+        <div>
+          <p className="eyebrow">Productivity history</p>
+          <h2>{formatStat(record.productive)}</h2>
+        </div>
+        <div className="date-controls">
+          <button className="small-icon" onClick={() => shiftDay(-1)} aria-label="Previous day">
+            <ChevronLeft size={18} />
+          </button>
+          <button className="small-icon" onClick={() => shiftDay(1)} disabled={selectedDate >= todayKey()} aria-label="Next day">
+            <ChevronRight size={18} />
+          </button>
+        </div>
+      </div>
+      <label className="date-picker">
+        Date
+        <input type="date" max={todayKey()} value={selectedDate} onChange={(event) => onSelectDate(event.target.value)} />
+      </label>
+      <div className="hour-grid" aria-label="Productivity by hour">
+        {hourMinutes.map((minutes, hour) => (
+          <div
+            className={`hour-cell ${minutes > 0 ? "productive" : ""}`}
+            style={{ "--fill": `${Math.min(100, (minutes / 60) * 100)}%` } as React.CSSProperties}
+            title={`${hourLabel(hour)}: ${minutes} productive minutes`}
+            key={hour}
+          >
+            <span>{hourLabel(hour)}</span>
+            <strong>{minutes ? `${minutes}m` : "-"}</strong>
+          </div>
+        ))}
+      </div>
+      <div className="history-legend">
+        <span><i className="legend-dot productive-dot" /> Productive</span>
+        <span><i className="legend-dot" /> Not tracked</span>
+      </div>
+    </section>
+  );
+}
+
+const hourLabel = (hour: number) => {
+  if (hour === 0) return "12a";
+  if (hour < 12) return `${hour}a`;
+  if (hour === 12) return "12p";
+  return `${hour - 12}p`;
+};
 
 function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (

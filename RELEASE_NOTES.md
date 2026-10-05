@@ -1,6 +1,6 @@
-# Productivity Setup v0.3.1
+# Productivity Setup v0.4.0
 
-Desktop update with persistent, customizable alarms.
+Desktop update with reliable alarms and daily productivity history.
 
 ## What's New
 
@@ -10,13 +10,16 @@ Desktop update with persistent, customizable alarms.
 - Pause, Skip, Reset, Finish, Done, Snooze, and Escape stop an active alarm.
 - Updated the Windows desktop build.
 - Added a circular grab handle beside Settings for moving the app window around the desktop.
+- Fixed sessions counting closed or suspended time as productive work.
+- Added a calendar with a 24-hour productivity timeline for each day.
+- Kept alarms and timer transitions active while the window is minimized.
 
 ## Local Download
 
 The packaged desktop app zip is created at:
 
 ```txt
-release/Productivity-Setup-Desktop-v0.3.1.zip
+release/Productivity-Setup-Desktop-v0.4.0.zip
 ```
 
 Unzip it, then run:

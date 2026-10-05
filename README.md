@@ -11,12 +11,13 @@ It is designed for people who want the benefits of frequent movement without hav
 - Shows a large circular visualization of the whole Sit, Stand, Walk cycle.
 - Starts with the default **Balanced Desk** routine: 20 minutes sitting, 8 minutes standing, 2 minutes moving.
 - Uses clear activity states with text, color, and symbols.
-- Keeps time from real timestamps instead of trusting `setInterval`, so refreshes, sleep, and backgrounding do not simply freeze the schedule.
+- Keeps time from real timestamps while the session is active and ignores suspended gaps.
 - Supports pause, skip, reset, finish session, and quick +/- 5 minute adjustments.
 - Shows eye-break and stretch overlays without resetting the main sit/stand/walk cycle.
 - Replaces every second movement break with a 5-minute recovery break when hourly recovery is enabled.
-- Tracks simple daily stats locally: productive time, sitting, standing, moving, eye breaks, and position changes.
-- Saves settings and session state in local storage.
+- Tracks daily productive time, sitting, standing, moving, eye breaks, and position changes.
+- Includes a date picker and 24-hour timeline showing exactly when productive work was recorded.
+- Saves settings and daily history locally. Reopening the app always starts with the timer stopped.
 - Includes notification permission flow for browser notifications.
 - Repeats a customizable alarm on activity changes and reminders until it is stopped or acknowledged.
 - Ships as an installable web app via a web app manifest.
@@ -38,7 +39,7 @@ Each render calculates remaining time from:
 phaseEndTimestamp - Date.now()
 ```
 
-That means the app can recover correctly when the browser refreshes, the computer sleeps, or the tab is left in the background. When the app wakes up, it advances through any phases that should have already finished.
+While the desktop app remains open, background timing continues when the window is minimized. Closing or suspending the app does not add unattended hours to the productivity total; reopening it begins in a stopped state.
 
 ## Default Routine
 
@@ -127,7 +128,7 @@ Create a Windows desktop app folder:
 npm run desktop:pack
 ```
 
-Build outputs go to `desktop-app-build-v4`. Open the generated folder and double-click `Productivity Setup.exe`.
+Build outputs go to `desktop-build`. Open the generated folder and double-click `Productivity Setup.exe`.
 
 Create a full Windows installer:
 
