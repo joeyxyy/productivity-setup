@@ -94,7 +94,8 @@ type SavedState = {
   settings: SettingsState;
 };
 
-const storageKey = "productivity-setup-v1";
+const storageKey = "productivity-setup-v2";
+const appVersion = "0.4.1";
 const dateKey = (timestamp = Date.now()) => {
   const date = new Date(timestamp);
   const year = date.getFullYear();
@@ -573,7 +574,7 @@ function App() {
       <section className="shell">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Productivity Setup</p>
+            <p className="eyebrow">Productivity Setup <span className="version-badge">v{appVersion}</span></p>
             <h1>{state.status === "idle" ? "Ready to start?" : current.label}</h1>
           </div>
           <div className="window-tools">
@@ -699,7 +700,7 @@ function App() {
               onSelectDate={setSelectedDate}
             />
           ) : (
-            <Dashboard stats={state.stats} />
+            <Dashboard stats={state.stats} testAlarm={startAlarm} stopAlarm={stopAlarm} alarmActive={alarmActive} />
           )}
         </aside>
       </section>
@@ -758,7 +759,17 @@ function makeRing(routine: Step[], cycleElapsed: number, cycleDuration: number) 
   };
 }
 
-function Dashboard({ stats }: { stats: Stats }) {
+function Dashboard({
+  stats,
+  testAlarm,
+  stopAlarm,
+  alarmActive,
+}: {
+  stats: Stats;
+  testAlarm: () => void;
+  stopAlarm: () => void;
+  alarmActive: boolean;
+}) {
   return (
     <section className="panel">
       <h2>Today</h2>
@@ -770,6 +781,10 @@ function Dashboard({ stats }: { stats: Stats }) {
         <Stat icon={<Eye />} label="Eye breaks" value={`${stats.eye}`} />
         <Stat icon={<RefreshCcw />} label="Changes" value={`${stats.changes}`} />
       </div>
+      <button className="wide dashboard-alarm" onClick={alarmActive ? stopAlarm : testAlarm}>
+        {alarmActive ? <BellOff size={18} /> : <Bell size={18} />}
+        {alarmActive ? "Silence alarm" : "Test alarm"}
+      </button>
     </section>
   );
 }

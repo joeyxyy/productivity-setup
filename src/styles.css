@@ -79,6 +79,18 @@ button:disabled {
   text-transform: uppercase;
 }
 
+.version-badge {
+  background: #dcfce7;
+  border: 1px solid #86efac;
+  border-radius: 999px;
+  color: #166534;
+  display: inline-block;
+  font-size: 0.68rem;
+  margin-left: 0.35rem;
+  padding: 0.12rem 0.38rem;
+  vertical-align: middle;
+}
+
 h1,
 h2,
 p {
@@ -485,6 +497,10 @@ h1 {
 
 .wide {
   width: 100%;
+}
+
+.dashboard-alarm {
+  margin-top: 0.8rem;
 }
 
 .quick-adjust {
